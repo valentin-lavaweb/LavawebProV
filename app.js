@@ -31,18 +31,26 @@ class RenderScene {
     this.renderer = new THREE.WebGLRenderer({
       type: THREE.HalfFloatType
     });
-    this.renderer.setPixelRatio = 1
+
+    // Проверка на слабое устройство
+    const isLowPerformanceDevice = navigator.hardwareConcurrency < 4 || (window.innerWidth > 768 && window.innerWidth <= 1440);
+    if (isLowPerformanceDevice) {
+        this.renderer.setSize(this.width / 2, this.height / 2);
+    } else {
+        this.renderer.setSize(this.width, this.height);
+    }
+
+
+    this.renderer.setPixelRatio(1)
     this.renderer.setSize(this.width, this.height);
-    // this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    // this.renderer.outputEncoding = THREE.sRGBEncoding
-    // this.renderer.toneMapping = THREE.NoToneMapping;
-    // this.renderer.toneMapping = THREE.LinearToneMapping;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 2;
-    // this.renderer.antialias = false
-    // this.renderer.alpha = false
     this.renderer.powerPreference = "high-performance"
     document.body.appendChild(this.renderer.domElement);
+    // Включение фрустумного отсечения
+    this.renderer.frustumCulled = true;
+
+
     this.renderTarget1 = new THREE.WebGLRenderTarget(this.width, this.height, {
       type: THREE.HalfFloatType
     });
@@ -50,6 +58,26 @@ class RenderScene {
       type: THREE.HalfFloatType
     });
   }
+
+  checkVisibility() {
+    this.scenes.forEach(({ scene, camera }) => {
+        scene.traverse((object) => {
+            if (object.isMesh) {
+                const frustum = new THREE.Frustum();
+                const cameraViewProjectionMatrix = new THREE.Matrix4();
+
+                camera.updateMatrixWorld();
+                camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+                cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+                frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
+
+                if (!frustum.intersectsObject(object)) {
+                    console.log(`Object ${object.name || object.id} is outside the camera frustum.`);
+                }
+            }
+        });
+    });
+}
 
   initScenes() {
     this.scene1 = new Scene1();
@@ -284,12 +312,32 @@ class RenderScene {
 	}
 
   animate = (time) => {
-    // this.renderer.render(this.testScene, this.testCamera);
-    this.renderRenderScene()
-    this.switchScenes()
-    // this.composerRender()
-    this.scene1.animate()
-    // }
+    // Проверка видимости объектов перед рендерингом
+    this.checkVisibility(this.scene, this.camera)
+
+    const fps = this.calculateFPS();
+    if (fps < 30) {
+        this.renderer.setPixelRatio(0.9)
+    } else {
+        this.renderer.setPixelRatio(1)
+    }
+    
+    this.renderRenderScene();
+    this.switchScenes();
+    this.scene1.animate();
+  }
+
+  calculateFPS() {
+    const now = performance.now();
+    this.frameCount++;
+    const delta = now - this.lastFrameTime;
+    if (delta >= 1000) {
+        const fps = this.frameCount / (delta / 1000);
+        this.frameCount = 0;
+        this.lastFrameTime = now;
+        return fps;
+    }
+    return 60; // Возвращаем 60 по умолчанию
   }
 }
 
