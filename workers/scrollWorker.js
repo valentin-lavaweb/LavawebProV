@@ -1,15 +1,11 @@
-onmessage = function(e) {
-    const data = e.data;
-
+self.onmessage = function(event) {
+    const data = event.data;
+    // Выполняем тяжелые вычисления
     const result = performHeavyComputations(data);
-
-    postMessage(result);
-}
+    self.postMessage(result);
+};
 
 function performHeavyComputations(data) {
-    let result = 0;
-    for (let i = 0; i < data.length; i++) {
-        result += data[i] * Math.random();
-    }
-    return result;
+    // Тяжелые вычисления здесь
+    return data; // Вернуть результат
 }

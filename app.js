@@ -162,7 +162,6 @@ class RenderScene {
     // Переключение рендер-таргетов
     [this.renderTarget1, this.renderTarget2] = [this.renderTarget2, this.renderTarget1];
   }
-
   initScroll() {
       // SCROLL
       this.currentScene = 0
