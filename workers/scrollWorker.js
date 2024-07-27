@@ -1,9 +1,15 @@
 onmessage = function(e) {
-    const deltaY = e.data;
+    const data = e.data;
 
-    // Выполнение тяжелых вычислений для скролла
-    const progressChange = deltaY / 1000;
+    const result = performHeavyComputations(data);
 
-    // Возвращаем результат обратно в основной поток
-    postMessage(progressChange);
+    postMessage(result);
+}
+
+function performHeavyComputations(data) {
+    let result = 0;
+    for (let i = 0; i < data.length; i++) {
+        result += data[i] * Math.random();
+    }
+    return result;
 }
