@@ -14,14 +14,17 @@ class RenderScene {
 
     this.initRenderer()
     this.initScenes()
-    this.initRenderScene()
     // this.initTestScene()
+    this.initRenderScene()
     this.initComposer()
     this.initScroll()
 
+    this.frameCount = 0;
+    this.lastFrameTime = performance.now();
+
     this.resize()
     this.renderer.setAnimationLoop(this.animate);
-    this.settings()
+    // this.settings()
   }
 
   initRenderer() {
@@ -58,26 +61,6 @@ class RenderScene {
       type: THREE.HalfFloatType
     });
   }
-
-  checkVisibility() {
-    this.scenes.forEach(({ scene, camera }) => {
-        scene.traverse((object) => {
-            if (object.isMesh) {
-                const frustum = new THREE.Frustum();
-                const cameraViewProjectionMatrix = new THREE.Matrix4();
-
-                camera.updateMatrixWorld();
-                camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
-                cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-                frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
-
-                if (!frustum.intersectsObject(object)) {
-                    console.log(`Object ${object.name || object.id} is outside the camera frustum.`);
-                }
-            }
-        });
-    });
-}
 
   initScenes() {
     this.scene1 = new Scene1();
@@ -149,7 +132,6 @@ class RenderScene {
   renderRenderScene() {
     this.renderShaderMaterial.uniforms.progress.value = this.progress
     this.scene.visible = false
-    // sceneMenuRef.current.scene.current.visible = false;
 
     // РЕНДЕР ПЕРВОЙ СЦЕНЫ В RENDERTARGET1
     this.renderer.setRenderTarget(this.renderTarget1);
@@ -187,8 +169,52 @@ class RenderScene {
       this.nextScene = 1
       this.progress = 0
       this.progressTo = 0
+      this.lastScrollTime = 0;
+      this.scrollCooldown = 100; // В миллисекундах
+      const scrollFunction = (e) => {
+        // this.progressTo -= e.deltaY / 1000;
+        console.log(this.progressTo, 
+          this.scenes[0].scrollTo,
+          this.scenes[1].scrollTo,
+          this.scenes[2].scrollTo
+        )
+        const scrollCoefficent = 5000;
+        if (this.progress === 0) {
+          this.scenes[this.currentScene].scrollTo -= e.deltaY / scrollCoefficent;
+          this.scenes[this.currentScene].scrollTo = Math.min(Math.max(this.scenes[this.currentScene].scrollTo, 0), 1);
+        }
+    
+        if (this.scenes[this.currentScene].scrollTo === 1) {
+          this.progressTo -= e.deltaY / 1000;
+        } else if (this.scenes[this.currentScene].scrollTo === 0 && this.progress === 0) {
+          this.progressTo -= e.deltaY / 1000;
+        }
+    
+        this.setScrollScenes()
+      };
+      
       const vs = new VirtualScroll();
-      vs.on(this.scrollFunction);
+      vs.on(throttle(scrollFunction, 100));
+
+      function throttle(func, limit) {
+        let lastFunc;
+        let lastRan;
+        return function(...args) {
+            const context = this;
+            if (!lastRan) {
+                func.apply(context, args);
+                lastRan = Date.now();
+            } else {
+                clearTimeout(lastFunc);
+                lastFunc = setTimeout(function() {
+                    if ((Date.now() - lastRan) >= limit) {
+                        func.apply(context, args);
+                        lastRan = Date.now();
+                    }
+                }, limit - (Date.now() - lastRan));
+            }
+        };
+      }
   }
   switchScenes() {    
     easing.damp(this, 'progress', this.progressTo, 0.6);
@@ -234,27 +260,6 @@ class RenderScene {
   getScenesCurrentScrolls() {
     this.scenes[0].currentScroll = this.scene1.getCurrentScroll()
   }
-  scrollFunction = (e) => {
-    // this.progressTo -= e.deltaY / 1000;
-    console.log(this.progressTo, 
-      this.scenes[0].scrollTo,
-      this.scenes[1].scrollTo,
-      this.scenes[2].scrollTo
-    )
-    const scrollCoefficent = 10000;
-    if (this.progress === 0) {
-      this.scenes[this.currentScene].scrollTo -= e.deltaY / scrollCoefficent;
-      this.scenes[this.currentScene].scrollTo = Math.min(Math.max(this.scenes[this.currentScene].scrollTo, 0), 1);
-    }
-
-    if (this.scenes[this.currentScene].scrollTo === 1) {
-      this.progressTo -= e.deltaY / 1000;
-    } else if (this.scenes[this.currentScene].scrollTo === 0 && this.progress === 0) {
-      this.progressTo -= e.deltaY / 1000;
-    }
-
-    this.setScrollScenes()
-  };
 
   initComposer() {
     this.composer = new EffectComposer(this.renderer, {
@@ -312,14 +317,12 @@ class RenderScene {
 	}
 
   animate = (time) => {
-    // Проверка видимости объектов перед рендерингом
-    this.checkVisibility(this.scene, this.camera)
 
     const fps = this.calculateFPS();
     if (fps < 30) {
         this.renderer.setPixelRatio(0.9)
     } else {
-        this.renderer.setPixelRatio(1)
+        this.renderer.setPixelRatio(window.devicePixelRatio)
     }
     
     this.renderRenderScene();

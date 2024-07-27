@@ -2,15 +2,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
-export default class Scene3 {
+export default class Scene2 {
     constructor(props) {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
 
         this.prepareScene()
         this.addLights()
-        this.addMesh()
-        // this.loadModel()
+        // this.addMesh()
+        this.loadModel()
     }
 
     prepareScene() {
@@ -39,11 +39,10 @@ export default class Scene3 {
         gltfLoader.setDRACOLoader(dracoLoader);
 
         // Загрузка GLB объекта и добавление его в сцену
-        gltfLoader.load('/models/scene2/BuildingScene.glb', (sceneModel) => {
+        gltfLoader.load('/models/scene2/Bot.glb', (sceneModel) => {
             sceneModel.scene.traverse((node) => {
                 if (node.isMesh && node.name === 'ScreenPlane') {
                     console.log(node.material)
-                //   node.material = hologramMaterialRef.current;
                 }
               });
             this.scene.add(sceneModel.scene)
