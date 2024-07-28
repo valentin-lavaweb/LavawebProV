@@ -9,6 +9,9 @@ import screenVectors from '../../templates/particles/schemes/schemeVectors/scree
 import vertexHologramVideo from '../../shaders/hologramVideoShader/vertex.glsl'
 import fragmentHologramVideo from '../../shaders/hologramVideoShader/fragment.glsl'
 
+// Инициализация Web Worker
+const cameraWorker = new Worker(new URL('./workers/cameraWorker.js', import.meta.url), { type: 'module' });
+
 export default class Scene1 {
     constructor(props) {
         this.width = window.innerWidth;
@@ -57,7 +60,14 @@ export default class Scene1 {
         this.loadModel()
         this.addLights()
 
-        
+        // Обработчик сообщений от Web Worker
+        cameraWorker.onmessage = (e) => {
+            const { updatedScroll, position, targetPosition } = e.data;
+            this.currentScroll = updatedScroll;
+            this.position.set(position.x, position.y, position.z);
+            this.targetPosition.set(targetPosition.x, targetPosition.y, targetPosition.z);
+            this.updateCamera();
+        };
     }
 
     prepareScene() {
@@ -128,7 +138,8 @@ export default class Scene1 {
                      child.material.name === 'BloomMedium' ||
                      child.material.name === 'BloomLow' ||
                      child.material.name === 'BloomWindow'
-                )) {
+                    )
+                ){
                     child.material.toneMapped = true
                     child.layers.toggle(1)
                 }
@@ -161,54 +172,45 @@ export default class Scene1 {
         this.camera.updateProjectionMatrix();
     }
 
-    cameraMoving() {        
-        const delta = 0.02
-        this.currentScroll = THREE.MathUtils.lerp(this.currentScroll, this.scrollTo, delta * 5)
-        this.currentScroll = Math.min(1, this.currentScroll)
-        this.currentScroll = Math.max(0, this.currentScroll)
+    cameraMoving() {
+        const delta = 0.02;
+        // Отправка данных в Web Worker
+        cameraWorker.postMessage({
+            currentScroll: this.currentScroll,
+            scrollTo: this.scrollTo,
+            delta: delta,
+            positionPoints: this.positionPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
+            targetPoints: this.targetPoints.map(p => ({ x: p.x, y: p.y, z: p.z }))
+        });
+    }
 
-        // Получаем точку на кривой в зависимости от значения progress
-        this.positionCurve.getPointAt(this.currentScroll, this.position)
-        this.targetCurve.getPointAt(this.currentScroll, this.targetPosition)
+    updateCamera() {
+        this.camera.position.lerp(this.position, 0.05);
+        this.camera.lookAt(this.targetPosition);
 
-        // Двигаем камеру к точке на кривой с использованием lerp для плавной интерполяции
-        this.camera.position.lerp(this.position, delta * 1.25)
+        // Оптимизация изменения кватерниона камеры
+        this.cameraQuaternion.setFromUnitVectors(this.camera.up, new THREE.Vector3(0, 1, 0));
+        this.targetQuaternion.setFromUnitVectors(this.camera.up, new THREE.Vector3(0, 1, 0));
+        this.camera.quaternion.slerpQuaternions(this.cameraQuaternion, this.targetQuaternion, 0.325);
 
-        // Плавное изменение кватерниона камеры с использованием slerp
-        this.camera.lookAt(this.targetPosition)
-        this.camera.getWorldQuaternion(this.targetQuaternion)
-        this.cameraQuaternion.slerp(this.targetQuaternion, delta * 3.25)
-        this.camera.quaternion.copy(this.cameraQuaternion)
-
-        // Плавное движение курсора
-        // Если мы не в конце сцены
         if (this.progress === 0) {
             if (this.camera.position.y < -8.5) {
-                this.pointer.y = Math.max(this.pointer.y, -0.25)
+                this.pointer.y = Math.max(this.pointer.y, -0.25);
             }
-            this.targetPointer.set(this.pointer.x, this.pointer.y)
-        } else { // Если мы в конце сцены
-            this.targetPointer.set(this.pointer.x * 0.25, this.pointer.y * 0.25)
+            this.targetPointer.set(this.pointer.x, this.pointer.y);
+        } else {
+            this.targetPointer.set(this.pointer.x * 0.25, this.pointer.y * 0.25);
         }
-        this.currentPointer.lerp(this.targetPointer, delta * 5)
+        this.currentPointer.lerp(this.targetPointer, 0.1);
 
-        // Обновляем смещение для lookAt
         this.lookAtOffset.set(
             this.targetPosition.x + (this.currentPointer.x) * this.factor,
             this.targetPosition.y + (this.currentPointer.y) * this.factor,
             this.targetPosition.z
-        )
+        );
 
-        // Плавное обновление позиции lookAt
-        this.lookAtPosition.lerp(this.lookAtOffset, delta * 5)
-        this.camera.lookAt(this.lookAtPosition)
-    }
-
-    // Обновление позиции камеры на основе данных из Web Worker
-    updateCameraPosition(newPosition) {
-        this.camera.position.set(newPosition.x, newPosition.y, newPosition.z);
-        this.camera.lookAt(this.targetPosition);
-        this.camera.updateProjectionMatrix();
+        this.lookAtPosition.lerp(this.lookAtOffset, 0.1);
+        this.camera.lookAt(this.lookAtPosition);
     }
 
     handleMouseMove() {

@@ -9,6 +9,9 @@ import renderShaderFragment from './shaders/renderShader/fragment.glsl'
 import { easing } from 'maath';
 import VirtualScroll from 'virtual-scroll';
 
+// Инициализация Web Worker
+const scrollWorker = new Worker(new URL('./workers/scrollWorker.js', import.meta.url), { type: 'module' });
+
 class RenderScene {
   constructor(props) {
 
@@ -163,57 +166,50 @@ class RenderScene {
     [this.renderTarget1, this.renderTarget2] = [this.renderTarget2, this.renderTarget1];
   }
   initScroll() {
-      // SCROLL
-      this.currentScene = 0
-      this.nextScene = 1
-      this.progress = 0
-      this.progressTo = 0
-      this.lastScrollTime = 0;
-      this.scrollCooldown = 100; // В миллисекундах
-      const scrollFunction = (e) => {
-        // this.progressTo -= e.deltaY / 1000;
-        console.log(this.progressTo, 
-          this.scenes[0].scrollTo,
-          this.scenes[1].scrollTo,
-          this.scenes[2].scrollTo
-        )
-        const scrollCoefficent = 5000;
-        if (this.progress === 0) {
-          this.scenes[this.currentScene].scrollTo -= e.deltaY / scrollCoefficent;
-          this.scenes[this.currentScene].scrollTo = Math.min(Math.max(this.scenes[this.currentScene].scrollTo, 0), 1);
-        }
+    // SCROLL
+    this.currentScene = 0
+    this.nextScene = 1
+    this.progress = 0
+    this.progressTo = 0
+    this.lastScrollTime = 0;
+    this.scrollCooldown = 100; // В миллисекундах
+    const scrollFunction = (e) => {
+      // Отправка данных в Web Worker
+      scrollWorker.postMessage({
+        deltaY: e.deltaY,
+        currentSceneScrollTo: this.scenes[this.currentScene].scrollTo
+      });
+    };
     
-        if (this.scenes[this.currentScene].scrollTo === 1) {
-          this.progressTo -= e.deltaY / 1000;
-        } else if (this.scenes[this.currentScene].scrollTo === 0 && this.progress === 0) {
-          this.progressTo -= e.deltaY / 1000;
-        }
-    
-        this.setScrollScenes()
-      };
-      
-      const vs = new VirtualScroll();
-      vs.on(throttle(scrollFunction, 100));
+    const vs = new VirtualScroll();
+    vs.on(throttle(scrollFunction, 100));
 
-      function throttle(func, limit) {
-        let lastFunc;
-        let lastRan;
-        return function(...args) {
-            const context = this;
-            if (!lastRan) {
-                func.apply(context, args);
-                lastRan = Date.now();
-            } else {
-                clearTimeout(lastFunc);
-                lastFunc = setTimeout(function() {
-                    if ((Date.now() - lastRan) >= limit) {
-                        func.apply(context, args);
-                        lastRan = Date.now();
-                    }
-                }, limit - (Date.now() - lastRan));
-            }
-        };
-      }
+    function throttle(func, limit) {
+      let lastFunc;
+      let lastRan;
+      return function(...args) {
+          const context = this;
+          if (!lastRan) {
+              func.apply(context, args);
+              lastRan = Date.now();
+          } else {
+              clearTimeout(lastFunc);
+              lastFunc = setTimeout(function() {
+                  if ((Date.now() - lastRan) >= limit) {
+                      func.apply(context, args);
+                      lastRan = Date.now();
+                  }
+              }, limit - (Date.now() - lastRan));
+          }
+      };
+    }
+
+    // Получение данных из Web Worker
+    scrollWorker.onmessage = (e) => {
+      this.progressTo = e.data.progressTo;
+      this.scenes[this.currentScene].scrollTo = e.data.scrollTo;
+      this.setScrollScenes();
+    };
   }
   switchScenes() {    
     easing.damp(this, 'progress', this.progressTo, 0.6);
