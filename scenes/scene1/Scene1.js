@@ -9,16 +9,11 @@ import screenVectors from '../../templates/particles/schemes/schemeVectors/scree
 import vertexHologramVideo from '../../shaders/hologramVideoShader/vertex.glsl'
 import fragmentHologramVideo from '../../shaders/hologramVideoShader/fragment.glsl'
 
-// Инициализация Web Worker
-const cameraWorker = new Worker(new URL('./workers/cameraWorker.js', import.meta.url), { type: 'module' });
-
 export default class Scene1 {
     constructor(props) {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
 
-        this.progress = 0
-        this.currentScroll = 0
         this.position = new THREE.Vector3()
         this.targetPosition = new THREE.Vector3()
         this.cameraQuaternion = new THREE.Quaternion()
@@ -53,21 +48,18 @@ export default class Scene1 {
         this.positionCurve = new THREE.CatmullRomCurve3(this.positionPoints)
         this.targetCurve = new THREE.CatmullRomCurve3(this.targetPoints)
 
-        this.handleMouseMove()
+        this.init()
+    }
+
+    init() {
         this.prepareScene()
         this.addParticles()
-        this.cameraStartPosition()
+        this.initCameraPosition()
         this.loadModel()
         this.addLights()
 
-        // Обработчик сообщений от Web Worker
-        cameraWorker.onmessage = (e) => {
-            const { updatedScroll, position, targetPosition } = e.data;
-            this.currentScroll = updatedScroll;
-            this.position.set(position.x, position.y, position.z);
-            this.targetPosition.set(targetPosition.x, targetPosition.y, targetPosition.z);
-            this.updateCamera();
-        };
+        // EVENT LISTENERS
+        this.initListeners()
     }
 
     prepareScene() {
@@ -166,41 +158,15 @@ export default class Scene1 {
         this.scene.add(light1, light2, light3)
     }
 
-    cameraStartPosition() {
+    initCameraPosition() {
         this.camera.position.copy(this.positionPoints[0]);
         this.camera.lookAt(this.targetPoints[0]);
         this.camera.updateProjectionMatrix();
     }
 
-    cameraMoving() {
-        const delta = 0.02;
-        // Отправка данных в Web Worker
-        cameraWorker.postMessage({
-            currentScroll: this.currentScroll,
-            scrollTo: this.scrollTo,
-            delta: delta,
-            positionPoints: this.positionPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
-            targetPoints: this.targetPoints.map(p => ({ x: p.x, y: p.y, z: p.z }))
-        });
-    }
-
     updateCamera() {
-        this.camera.position.lerp(this.position, 0.05);
+        this.camera.position.lerp(this.positionPoints[0], 0.05);
         this.camera.lookAt(this.targetPosition);
-
-        // Оптимизация изменения кватерниона камеры
-        this.cameraQuaternion.setFromUnitVectors(this.camera.up, new THREE.Vector3(0, 1, 0));
-        this.targetQuaternion.setFromUnitVectors(this.camera.up, new THREE.Vector3(0, 1, 0));
-        this.camera.quaternion.slerpQuaternions(this.cameraQuaternion, this.targetQuaternion, 0.325);
-
-        if (this.progress === 0) {
-            if (this.camera.position.y < -8.5) {
-                this.pointer.y = Math.max(this.pointer.y, -0.25);
-            }
-            this.targetPointer.set(this.pointer.x, this.pointer.y);
-        } else {
-            this.targetPointer.set(this.pointer.x * 0.25, this.pointer.y * 0.25);
-        }
         this.currentPointer.lerp(this.targetPointer, 0.1);
 
         this.lookAtOffset.set(
@@ -213,26 +179,39 @@ export default class Scene1 {
         this.camera.lookAt(this.lookAtPosition);
     }
 
-    handleMouseMove() {
+    initListeners() {
         const handleMouseMove = (e) => {
-            this.pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-            this.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            this.targetPointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+            this.targetPointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
         }
         window.addEventListener('mousemove', handleMouseMove);
-    };
 
-    setScrollTo(scrollTo) {
-        this.scrollTo = scrollTo
-    }
-    setProgress(progress) {
-        this.progress = progress
-    }
-    getCurrentScroll() {
-        return this.currentScroll
-    }
-    setCurrentScroll(currentScroll) {
-        this.currentScroll = currentScroll
-    }
+
+        const handleWheel = (e) => {
+            // Скролл вверх
+            if (e.deltaY > 0) {
+                this.positionPoints[0].z += 0.5
+                this.positionPoints[0].z = Math.min(this.positionPoints[0].z, 30)
+            }
+            if (e.deltaY < 0) {
+                this.positionPoints[0].z -= 0.5
+                this.positionPoints[0].z = Math.max(this.positionPoints[0].z, 3)
+            }
+        }
+        window.addEventListener('wheel', handleWheel);
+
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'ArrowUp') {
+                this.positionPoints[0].y += 0.5;
+            }
+            if (e.key === 'ArrowDown') {
+                this.positionPoints[0].y -= 0.5;
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+    };
+    
   
     animate() {
         this.frameCount++;
@@ -243,7 +222,6 @@ export default class Scene1 {
         this.rain2.animate()
         this.wires.animate()
         this.screenSchemes.animate()
-        // cameraMoving()
-        this.cameraMoving()
+        this.updateCamera()
     }
 }
