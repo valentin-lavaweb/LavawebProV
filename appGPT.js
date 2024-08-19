@@ -44,15 +44,15 @@ class RenderScene {
     });
 
     // Проверка на слабое устройство
-    // const isLowPerformanceDevice = navigator.hardwareConcurrency < 4 || (window.innerWidth > 768 && window.innerWidth <= 1440);
-    // if (isLowPerformanceDevice) {
-    //     this.renderer.setSize(this.width * 0.9, this.height * 0.9);
-    // } else {
-    //     this.renderer.setSize(this.width, this.height);
-    // }
+    const isLowPerformanceDevice = navigator.hardwareConcurrency < 4 || (window.innerWidth > 768 && window.innerWidth <= 1440);
+    if (isLowPerformanceDevice) {
+        this.renderer.setSize(this.width * 0.9, this.height * 0.9);
+    } else {
+        this.renderer.setSize(this.width, this.height);
+    }
 
 
-    this.renderer.setPixelRatio(window.devicePixelRatio)
+    this.renderer.setPixelRatio(1)
     this.renderer.setSize(this.width, this.height);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 2;
@@ -207,9 +207,11 @@ class RenderScene {
 
     this.bloomEffect = new BloomEffect({
       intensity: .3,
-      luminanceSmoothing: 1.5,
-      luminanceThreshold: 0.5,
+      luminanceSmoothing: 0.2,
+      luminanceThreshold: 0.1,
       mipmapBlur: true,
+      levels: 2,
+      // radius: 0.25
     });
     this.bloomEffect.blendMode.blendFunction = BlendFunction.SCREEN
     const effectPass = new EffectPass(this.camera, this.bloomEffect);

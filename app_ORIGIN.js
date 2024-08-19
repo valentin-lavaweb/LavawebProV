@@ -17,7 +17,6 @@ class RenderScene {
 
     this.initRenderer()
     this.initScenes()
-    // this.initTestScene()
     this.initRenderScene()
     this.initComposer()
     this.initScroll()
@@ -47,7 +46,7 @@ class RenderScene {
     }
 
 
-    this.renderer.setPixelRatio(1)
+    this.renderer.setPixelRatio(window.devicePixelRatio)
     this.renderer.setSize(this.width, this.height);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 2;
@@ -90,24 +89,6 @@ class RenderScene {
         currentScroll: 1
       }
     ]
-  }
-
-  initTestScene() {
-    // Инициализация сцены, камеры и рендерера
-    this.testScene = new THREE.Scene();
-    this.testScene.background = new THREE.Color('black')
-    this.testCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.testCamera.position.z = 5
-
-    // Добавление объектов на сцену с насыщенными цветами
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(1, 1, 1), emissive: new THREE.Color(0, 0, 10), emissiveIntensity: 10 });
-    const cube = new THREE.Mesh(geometry, material);
-    this.testScene.add(cube);
-
-    const light = new THREE.DirectionalLight(0xffffff, 2);
-    light.position.set(0, 1, 1);
-    this.testScene.add(light);
   }
 
   initRenderScene() {
@@ -173,47 +154,9 @@ class RenderScene {
     this.progressTo = 0
     this.lastScrollTime = 0;
     this.scrollCooldown = 100; // В миллисекундах
-    const scrollFunction = (e) => {
-      // Отправка данных в Web Worker
-      scrollWorker.postMessage({
-        deltaY: e.deltaY,
-        currentSceneScrollTo: this.scenes[this.currentScene].scrollTo
-      });
-    };
-    
-    const vs = new VirtualScroll();
-    vs.on(throttle(scrollFunction, 100));
-
-    function throttle(func, limit) {
-      let lastFunc;
-      let lastRan;
-      return function(...args) {
-          const context = this;
-          if (!lastRan) {
-              func.apply(context, args);
-              lastRan = Date.now();
-          } else {
-              clearTimeout(lastFunc);
-              lastFunc = setTimeout(function() {
-                  if ((Date.now() - lastRan) >= limit) {
-                      func.apply(context, args);
-                      lastRan = Date.now();
-                  }
-              }, limit - (Date.now() - lastRan));
-          }
-      };
-    }
-
-    // Получение данных из Web Worker
-    scrollWorker.onmessage = (e) => {
-      this.progressTo = e.data.progressTo;
-      this.scenes[this.currentScene].scrollTo = e.data.scrollTo;
-      this.setScrollScenes();
-    };
   }
   switchScenes() {    
     easing.damp(this, 'progress', this.progressTo, 0.6);
-    this.scene1.setProgress(this.progress)
   
     if (this.progress > 1) {
       this.progressTo = 0;
@@ -249,16 +192,15 @@ class RenderScene {
       this.progressTo = 1;
     }
   }
-  setScrollScenes() {
-    this.scene1.setScrollTo(this.scenes[0].scrollTo)
-  }
+
   getScenesCurrentScrolls() {
     this.scenes[0].currentScroll = this.scene1.getCurrentScroll()
   }
 
   initComposer() {
     this.composer = new EffectComposer(this.renderer, {
-      frameBufferType: THREE.HalfFloatType
+      frameBufferType: THREE.HalfFloatType,
+      multisampling: 1
     });
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
